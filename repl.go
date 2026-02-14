@@ -5,7 +5,5 @@ import (
 )
 
 func cleanInput(text string) []string {
-	return strings.Fields(text)
-	//return []string{}
-
+	return strings.Fields(strings.ToLower(text))
 }
