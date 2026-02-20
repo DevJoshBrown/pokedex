@@ -8,9 +8,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	pokecache "github.com/DevJoshBrown/pokedex/internal"
 )
 
 var commands = map[string]cliCommand{}
+
+var cache = pokecache.NewCache(5 * time.Second)
 
 type cliCommand struct {
 	name        string
@@ -42,7 +47,7 @@ func commandExit(cfg *config) error {
 }
 
 func commandHelp(cfg *config) error {
-	fmt.Println("Welcome to the Pokedex!\nUsage:\n\n")
+	fmt.Print("Welcome to the Pokedex!\nUsage:\n\n")
 
 	for _, c := range commands {
 		fmt.Printf("%v: %v\n", c.name, c.description)
@@ -52,17 +57,27 @@ func commandHelp(cfg *config) error {
 
 func commandMap(cfg *config) error {
 
-	// THE HTTP GET REQUEST TO THE POKEAPI.
-	res, err := http.Get(cfg.Next)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
+	// scoping
+	var body []byte
+	var err error
 
-	// READ THE BODY OF THE REQUEST.
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
+	data, found := cache.Get(cfg.Next)
+	if found {
+		body = data
+	} else {
+		// THE HTTP GET REQUEST TO THE POKEAPI.
+		res, err := http.Get(cfg.Next)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		// READ THE BODY OF THE REQUEST.
+		body, err = io.ReadAll(res.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cache.Add(cfg.Next, body)
 	}
 
 	// Create a local instance of the "config" type
@@ -87,23 +102,31 @@ func commandMap(cfg *config) error {
 }
 
 func commandMapb(cfg *config) error {
+
+	var body []byte
+	var err error
+
 	if cfg.Previous == nil {
 		fmt.Println("You're on the first page")
 		return nil
 	} else {
+		data, found := cache.Get(*cfg.Previous)
+		if found {
+			body = data
+		} else {
+			res, err := http.Get(*cfg.Previous)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer res.Body.Close()
 
-	}
-
-	res, err := http.Get(*cfg.Previous)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
-
-	// READ THE BODY OF THE REQUEST.
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
+			// READ THE BODY OF THE REQUEST.
+			body, err = io.ReadAll(res.Body)
+			if err != nil {
+				log.Fatal(err)
+			}
+			cache.Add(*cfg.Previous, body)
+		}
 	}
 
 	// Create a local instance of the "config" type
